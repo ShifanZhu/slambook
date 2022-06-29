@@ -262,10 +262,13 @@ bool poseEstimationDirect ( const vector< Measurement >& measurements, cv::Mat* 
 {
     // 初始化g2o
     typedef g2o::BlockSolver<g2o::BlockSolverTraits<6,1>> DirectBlock;  // 求解的向量是6＊1的
-    DirectBlock::LinearSolverType* linearSolver = new g2o::LinearSolverDense< DirectBlock::PoseMatrixType > ();
-    DirectBlock* solver_ptr = new DirectBlock ( linearSolver );
-    // g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr ); // G-N
-    g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg ( solver_ptr ); // L-M
+    // DirectBlock::LinearSolverType* linearSolver = new g2o::LinearSolverDense< DirectBlock::PoseMatrixType > ();
+    // DirectBlock* solver_ptr = new DirectBlock ( linearSolver );
+    // // g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr ); // G-N
+    // g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg ( solver_ptr ); // L-M
+
+    auto solver = new g2o::OptimizationAlgorithmLevenberg(
+                g2o::make_unique<DirectBlock>(g2o::make_unique<g2o::LinearSolverDense<DirectBlock::PoseMatrixType> >()));
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm ( solver );
     optimizer.setVerbose( true );

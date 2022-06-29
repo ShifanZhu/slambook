@@ -131,8 +131,8 @@ public:
     }
 
     // dummy read and write functions because we don't care...
-    virtual bool read ( std::istream& in ) {}
-    virtual bool write ( std::ostream& out ) const {}
+    virtual bool read ( std::istream& in ) {return true;}
+    virtual bool write ( std::ostream& out ) const {return true;}
 
 protected:
     // get a gray scale value from reference image (bilinear interpolated)
@@ -156,13 +156,14 @@ public:
 
 int main ( int argc, char** argv )
 {
-    if ( argc != 2 )
+    if ( argc != 1 )
     {
-        cout<<"usage: useLK path_to_dataset"<<endl;
+        cout<<"usage: useLK path_to_dataset. No need to provide now."<<endl;
         return 1;
     }
     srand ( ( unsigned int ) time ( 0 ) );
-    string path_to_dataset = argv[1];
+    // string path_to_dataset = argv[1];
+    string path_to_dataset = "../../data/data";
     string associate_file = path_to_dataset + "/associate.txt";
 
     ifstream fin ( associate_file );
@@ -216,6 +217,7 @@ int main ( int argc, char** argv )
         // 使用直接法计算相机运动
         chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
         poseEstimationDirect ( measurements, &gray, K, Tcw );
+        std::cout << "finish direct pose estimation" << std::endl;
         chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
         chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>> ( t2-t1 );
         cout<<"direct method costs time: "<<time_used.count() <<" seconds."<<endl;
@@ -254,10 +256,16 @@ bool poseEstimationDirect ( const vector< Measurement >& measurements, cv::Mat* 
 {
     // 初始化g2o
     typedef g2o::BlockSolver<g2o::BlockSolverTraits<6,1>> DirectBlock;  // 求解的向量是6＊1的
-    DirectBlock::LinearSolverType* linearSolver = new g2o::LinearSolverDense< DirectBlock::PoseMatrixType > ();
-    DirectBlock* solver_ptr = new DirectBlock ( linearSolver );
-    // g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr ); // G-N
-    g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg ( solver_ptr ); // L-M
+    typedef g2o::LinearSolverDense<DirectBlock::PoseMatrixType> LinearSolverType;
+    // DirectBlock::LinearSolverType* linearSolver = new g2o::LinearSolverDense< DirectBlock::PoseMatrixType > ();
+    std::unique_ptr<DirectBlock::LinearSolverType> linearSolver (new g2o::LinearSolverDense< DirectBlock::PoseMatrixType>());
+    // DirectBlock* solver_ptr = new DirectBlock ( linearSolver );
+    std::unique_ptr<DirectBlock> solver_ptr (new DirectBlock ( std::move(linearSolver)));
+    // // g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr ); // G-N
+    // g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg ( solver_ptr ); // L-M
+    g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg ( std::move(solver_ptr) ); // L-M
+    // auto solver = new g2o::OptimizationAlgorithmLevenberg(
+    //             g2o::make_unique<DirectBlock>(g2o::make_unique<LinearSolverType>()));
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm ( solver );
     optimizer.setVerbose( true );
@@ -284,6 +292,8 @@ bool poseEstimationDirect ( const vector< Measurement >& measurements, cv::Mat* 
     cout<<"edges in graph: "<<optimizer.edges().size() <<endl;
     optimizer.initializeOptimization();
     optimizer.optimize ( 30 );
+    std::cout << "0" << std::endl;
     Tcw = pose->estimate();
+    std::cout << "1" << std::endl;
 }
 
