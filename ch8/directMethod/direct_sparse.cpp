@@ -191,7 +191,7 @@ int main ( int argc, char** argv )
     boost::format fmt("%s/image_%d/%06d.png"); // 10 us
     string rgbd_dataset_path_ = "/home/zh/data/img";
     
-    cv::Mat prev_color, prev_gray, prev_depth;
+    cv::Mat prev_color, prev_gray, prev_depth, gray_ori, prev_gray_ori;
     bool first_img = false;
     // 我们以第一个图像为参考，对后续图像和参考图像做直接法
     for ( int index=700; index<3500; index+=2 ) {
@@ -205,6 +205,9 @@ int main ( int argc, char** argv )
         gray =
             cv::imread((fmt % rgbd_dataset_path_ % 0 % index).str(),
                    cv::IMREAD_GRAYSCALE);
+        gray_ori = gray.clone();
+        cv::GaussianBlur(gray, gray, cv::Size(9, 9), 2);
+
         depth =
             cv::imread((fmt % rgbd_dataset_path_ % 1 % index).str(), cv::IMREAD_UNCHANGED);
  
@@ -215,6 +218,7 @@ int main ( int argc, char** argv )
             first_img = true;
             prev_gray = gray.clone();
             prev_depth = depth.clone();
+            prev_gray_ori = gray_ori.clone();
             continue;
         }
             // // 对第一帧提取FAST特征点
@@ -236,6 +240,7 @@ int main ( int argc, char** argv )
             // prev_color = color.clone();
             // continue;
 
+            chrono::steady_clock::time_point t0 = chrono::steady_clock::now();
             measurements.clear();
             // int grid_size = 40; // grid size is 40*40
             // int rows = prev_gray.rows; // 360
@@ -250,12 +255,12 @@ int main ( int argc, char** argv )
             //         for (int j = 0; j < grid_size; j++) { // row
             //             for (int i = 0; i < grid_size; i++) { // col
             //                 Eigen::Vector2d delta (
-            //                     prev_gray.ptr<uchar>(j+grid_size*y)[i+grid_size*x+1] - prev_gray.ptr<uchar>(j+grid_size*y)[i+grid_size*x-1], 
-            //                     prev_gray.ptr<uchar>(j+grid_size*y+1)[i+grid_size*x] - prev_gray.ptr<uchar>(j+grid_size*y-1)[i+grid_size*x]
+            //                     prev_gray_ori.ptr<uchar>(j+grid_size*y)[i+grid_size*x+1] - prev_gray_ori.ptr<uchar>(j+grid_size*y)[i+grid_size*x-1], 
+            //                     prev_gray_ori.ptr<uchar>(j+grid_size*y+1)[i+grid_size*x] - prev_gray_ori.ptr<uchar>(j+grid_size*y-1)[i+grid_size*x]
             //                 );
             //                 int g = delta.norm();
             //                 // cout << " " << g;
-            //                 if ( g < 10 )
+            //                 if ( g < 30 )
             //                     continue;
             //                 if ( g > 98) g = 98;
             //                 grad_cnt[g+1]++;
@@ -269,7 +274,8 @@ int main ( int argc, char** argv )
             //         for (int i = 99; i > 30; i--) {
             //             grad_th_cnt -= grad_cnt[i];
             //             max_num -= grad_cnt[i];
-            //             if (grad_th_cnt < 0 || max_num < 0) {
+            //             // if (grad_th_cnt < 0 || max_num < 0) {
+            //             if (max_num < 0) {
             //                 th = i;
             //                 break;
             //             }
@@ -279,15 +285,15 @@ int main ( int argc, char** argv )
             //         for (int j = 1; j < grid_size-1; j++) { // row
             //             for (int i = 1; i < grid_size-1; i++) { // col
             //                 Eigen::Vector2d delta (
-            //                     prev_gray.ptr<uchar>(j+grid_size*y)[i+grid_size*x+1] - prev_gray.ptr<uchar>(j+grid_size*y)[i+grid_size*x-1], 
-            //                     prev_gray.ptr<uchar>(j+grid_size*y+1)[i+grid_size*x] - prev_gray.ptr<uchar>(j+grid_size*y-1)[i+grid_size*x]
+            //                     prev_gray_ori.ptr<uchar>(j+grid_size*y)[i+grid_size*x+1] - prev_gray_ori.ptr<uchar>(j+grid_size*y)[i+grid_size*x-1], 
+            //                     prev_gray_ori.ptr<uchar>(j+grid_size*y+1)[i+grid_size*x] - prev_gray_ori.ptr<uchar>(j+grid_size*y-1)[i+grid_size*x]
             //                 );
             //                 int g = delta.norm();
             //                 // if ( g < 9 )
             //                 //     continue;
             //                 if ( g > th) {
             //                     ushort d = prev_depth.ptr<ushort> (j+grid_size*y)[i+grid_size*x+1];
-            //                     if ( float ( d ) /depth_scale < 0.3 || float ( d ) /depth_scale > 3)
+            //                     if ( float ( d ) /depth_scale < 0.3 || float ( d ) /depth_scale > 6)
             //                         continue;
             //                     Eigen::Vector3d p3d = project2Dto3D ( i+grid_size*x, j+grid_size*y, d, fx, fy, cx, cy, depth_scale );
             //                     float grayscale = float ( prev_gray.ptr<uchar> (j+grid_size*y)[i+grid_size*x+1] );
@@ -304,44 +310,44 @@ int main ( int argc, char** argv )
 
 
             // select the pixels with high gradiants 
-            // for ( int x=1; x<prev_gray.cols-1; x++ )
-            //     for ( int y=1; y<prev_gray.rows-1; y++ )
-            //     {
-            //         Eigen::Vector2d delta (
-            //             prev_gray.ptr<uchar>(y)[x+1] - prev_gray.ptr<uchar>(y)[x-1], 
-            //             prev_gray.ptr<uchar>(y+1)[x] - prev_gray.ptr<uchar>(y-1)[x]
-            //         );
+            for ( int x=1; x<prev_gray.cols-1; x+=2 )
+                for ( int y=1; y<prev_gray.rows-1; y+=2 )
+                {
+                    Eigen::Vector2d delta (
+                        prev_gray_ori.ptr<uchar>(y)[x+1] - prev_gray_ori.ptr<uchar>(y)[x-1], 
+                        prev_gray_ori.ptr<uchar>(y+1)[x] - prev_gray_ori.ptr<uchar>(y-1)[x]
+                    );
 
-            //         if ( delta.norm() < 80 )
-            //             continue;
-            //         ushort d = prev_depth.ptr<ushort> (y)[x];
-            //         if ( d==0 )
-            //             continue;
-            //         Eigen::Vector3d p3d = project2Dto3D ( x, y, d, fx, fy, cx, cy, depth_scale );
-            //         float grayscale = float ( prev_gray.ptr<uchar> (y) [x] );
-            //         measurements.push_back ( Measurement ( p3d, grayscale ) );
-            //     }
-
-
+                    if ( delta.norm() < 80 )
+                        continue;
+                    ushort d = prev_depth.ptr<ushort> (y)[x];
+                    if ( d==0 )
+                        continue;
+                    Eigen::Vector3d p3d = project2Dto3D ( x, y, d, fx, fy, cx, cy, depth_scale );
+                    float grayscale = float ( prev_gray.ptr<uchar> (y) [x] );
+                    measurements.push_back ( Measurement ( p3d, grayscale ) );
+                }
 
 
-            cv::Mat grad_x, grad_y;
-            cv::Mat abs_grad_x, abs_grad_y, dst;
 
-            //求x方向梯度
-            Sobel(prev_gray, grad_x, CV_16S, 1, 0, 3, 1, 1, cv::BORDER_DEFAULT);
-            convertScaleAbs(grad_x, abs_grad_x);
-            imshow("x方向soble", abs_grad_x);
 
-            //求y方向梯度
-            Sobel(prev_gray, grad_y,CV_16S,0, 1,3, 1, 1, cv::BORDER_DEFAULT);
-            convertScaleAbs(grad_y,abs_grad_y);
-            imshow("y向soble", abs_grad_y);
+            // cv::Mat grad_x, grad_y;
+            // cv::Mat abs_grad_x, abs_grad_y, dst;
 
-            //合并梯度
-            addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst);
-            imshow("整体方向soble", dst);
-            cv::waitKey(0);
+            // //求x方向梯度
+            // Sobel(prev_gray, grad_x, CV_16S, 1, 0, 3, 1, 1, cv::BORDER_DEFAULT);
+            // convertScaleAbs(grad_x, abs_grad_x);
+            // imshow("x方向soble", abs_grad_x);
+
+            // //求y方向梯度
+            // Sobel(prev_gray, grad_y,CV_16S,0, 1,3, 1, 1, cv::BORDER_DEFAULT);
+            // convertScaleAbs(grad_y,abs_grad_y);
+            // imshow("y向soble", abs_grad_y);
+
+            // //合并梯度
+            // addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, dst);
+            // imshow("整体方向soble", dst);
+            // cv::waitKey(0);
             prev_gray = prev_gray.clone();
             cout<<"add total "<<measurements.size()<<" measurements."<<endl;
 
@@ -437,6 +443,8 @@ int main ( int argc, char** argv )
         std::cout << "finish direct pose estimation" << std::endl;
         chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
         chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>> ( t2-t1 );
+        chrono::duration<double> time_used_feature_extraction = chrono::duration_cast<chrono::duration<double>> ( t1-t0 );
+        cout<<"direct method feature extraction costs time: "<<time_used_feature_extraction.count() <<" seconds."<<endl;
         cout<<"direct method costs time: "<<time_used.count() <<" seconds."<<endl;
         Tcw = pose->estimate();
         cout<<"Tcw="<<Tcw.matrix() <<endl;
@@ -446,6 +454,7 @@ int main ( int argc, char** argv )
         cv::cvtColor ( prev_gray, prev_color, cv::COLOR_GRAY2BGR);
         cv::cvtColor ( gray, color, cv::COLOR_GRAY2BGR);
         prev_gray = gray.clone();
+        prev_gray_ori = gray_ori.clone();
         prev_color.copyTo ( img_show ( cv::Rect ( 0,0,gray.cols, gray.rows ) ) );
         color.copyTo ( img_show ( cv::Rect ( 0,gray.rows,gray.cols, gray.rows ) ) );
         for ( Measurement m:measurements )
