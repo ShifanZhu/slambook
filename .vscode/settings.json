@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "core": "cpp",
-        "numericaldiff": "cpp"
+        "numericaldiff": "cpp",
+        "chrono": "cpp",
+        "ostream": "cpp"
     }
 }

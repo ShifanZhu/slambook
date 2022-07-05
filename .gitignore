@@ -6,3 +6,5 @@ cmake_install.cmake
 *.kdev4
 *.DS*
 .idea*
+*CMakeFiles*
+*Makefile*

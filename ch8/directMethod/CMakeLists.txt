@@ -2,7 +2,7 @@ cmake_minimum_required( VERSION 2.8 )
 project( directMethod )
 
 set( CMAKE_BUILD_TYPE Release )
-set( CMAKE_CXX_FLAGS "-std=c++11 -O3 -pthread" )
+set( CMAKE_CXX_FLAGS "-std=c++14 -O3 -pthread" )
 
 # 添加cmake模块路径
 list( APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules )
