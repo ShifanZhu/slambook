@@ -3,6 +3,7 @@
         "core": "cpp",
         "numericaldiff": "cpp",
         "chrono": "cpp",
-        "ostream": "cpp"
+        "ostream": "cpp",
+        "iosfwd": "cpp"
     }
 }
