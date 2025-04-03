@@ -75,6 +75,7 @@ public:
         return false;
     }
 
+    // 为了使用 Ceres 求导功能而定义的函数，让本类成为拟函数类
     virtual void computeError() override   // The virtual function comes from the Edge base class. Must define if you use edge.
     {
         const VertexCameraBAL* cam = static_cast<const VertexCameraBAL*> ( vertex ( 0 ) );

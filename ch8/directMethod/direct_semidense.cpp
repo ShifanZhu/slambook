@@ -21,6 +21,10 @@
 using namespace std;
 using namespace g2o;
 
+typedef Eigen::Matrix<double, 8, 1> Vec8d;
+typedef Eigen::Matrix<double, 9, 1> Vec9d;
+typedef Eigen::Matrix<float, 9, 1> Vec9f;
+
 /********************************************
  * 本节演示了RGBD上的半稠密直接法 
  ********************************************/
@@ -28,9 +32,11 @@ using namespace g2o;
 // 一次测量的值，包括一个世界坐标系下三维点与一个灰度值
 struct Measurement
 {
-    Measurement ( Eigen::Vector3d p, float g ) : pos_world ( p ), grayscale ( g ) {}
+    Measurement ( Eigen::Vector3d p, float g, Vec9d& gs) : pos_world ( p ), grayscale ( g ), grayscales(gs) {}
+    // Measurement ( Eigen::Vector3d p, float g ) : pos_world ( p ), grayscale ( g ) {}
     Eigen::Vector3d pos_world;
     float grayscale;
+    Vec9d grayscales;
 };
 
 inline Eigen::Vector3d project2Dto3D ( int x, int y, int d, float fx, float fy, float cx, float cy, float scale )
@@ -56,7 +62,8 @@ bool poseEstimationDirect ( const vector<Measurement>& measurements, cv::Mat* gr
 
 // project a 3d point into an image plane, the error is photometric error
 // an unary edge with one vertex SE3Expmap (the pose of camera)
-class EdgeSE3ProjectDirect: public BaseUnaryEdge< 1, double, VertexSE3Expmap>
+class EdgeSE3ProjectDirect: public BaseUnaryEdge< 9, Vec9d, VertexSE3Expmap>
+// class EdgeSE3ProjectDirect: public BaseUnaryEdge< 1, double, VertexSE3Expmap>
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -76,12 +83,19 @@ public:
         // check x,y is in the image
         if ( x-4<0 || ( x+4 ) >image_->cols || ( y-4 ) <0 || ( y+4 ) >image_->rows )
         {
-            _error ( 0,0 ) = 0.0;
+            _error = Vec9d::Zero();
+            // _error ( 0,0 ) = 0.0;
             this->setLevel ( 1 );
         }
         else
         {
-            _error ( 0,0 ) = getPixelValue ( x,y ) - _measurement;
+            // _error ( 0,0 ) = getPixelValue ( x,y ) - _measurement;
+            Vec9d obsv;
+            for (int i = 0; i < 9; i++) {
+                float ob = getPixelValue ( x+pattern_[i][0], y+pattern_[i][1]);
+                obsv[i] = ob;
+            }
+            _error = obsv - _measurement;
         }
     }
 
@@ -90,7 +104,8 @@ public:
     {
         if ( level() == 1 )
         {
-            _jacobianOplusXi = Eigen::Matrix<double, 1, 6>::Zero();
+            _jacobianOplusXi = Eigen::Matrix<double, 9, 6>::Zero();
+            // _jacobianOplusXi = Eigen::Matrix<double, 1, 6>::Zero();
             return;
         }
         VertexSE3Expmap* vtx = static_cast<VertexSE3Expmap*> ( _vertices[0] );
@@ -122,10 +137,15 @@ public:
         jacobian_uv_ksai ( 1,4 ) = invz *fy_;
         jacobian_uv_ksai ( 1,5 ) = -y*invz_2 *fy_;
 
-        Eigen::Matrix<double, 1, 2> jacobian_pixel_uv;
+        Eigen::Matrix<double, 9, 2> jacobian_pixel_uv;
+        for (int i = 0; i < 9; i++) {
+            jacobian_pixel_uv ( i,0 ) = ( getPixelValue ( u+1+pattern_[i][0],v+pattern_[i][1] )-getPixelValue ( u-1+pattern_[i][0],v+pattern_[i][1] ) ) /2;
+            jacobian_pixel_uv ( i,1 ) = ( getPixelValue ( u+pattern_[i][0],v+1+pattern_[i][1] )-getPixelValue ( u+pattern_[i][0],v-1+pattern_[i][1] ) ) /2;
+        }
 
-        jacobian_pixel_uv ( 0,0 ) = ( getPixelValue ( u+1,v )-getPixelValue ( u-1,v ) ) /2;
-        jacobian_pixel_uv ( 0,1 ) = ( getPixelValue ( u,v+1 )-getPixelValue ( u,v-1 ) ) /2;
+        // Eigen::Matrix<double, 1, 2> jacobian_pixel_uv;
+        // jacobian_pixel_uv ( 0,0 ) = ( getPixelValue ( u+1,v )-getPixelValue ( u-1,v ) ) /2;
+        // jacobian_pixel_uv ( 0,1 ) = ( getPixelValue ( u,v+1 )-getPixelValue ( u,v-1 ) ) /2;
 
         _jacobianOplusXi = jacobian_pixel_uv*jacobian_uv_ksai;
     }
@@ -152,6 +172,9 @@ public:
     Eigen::Vector3d x_world_;   // 3D point in world frame
     float cx_=0, cy_=0, fx_=0, fy_=0; // Camera intrinsics
     cv::Mat* image_=nullptr;    // reference image
+    // int pattern_[9][2] = {{0, 0}, {0,-2}, {-1,-1}, {1,-1}, {-2,0}, {1,1}, {2,0}, {-1,1}, {0,2}};
+    // int pattern_[9][2] = {{0, 0}, {0,-3}, {-2,-2}, {2,-2}, {-2,0}, {2,2}, {3,0}, {-2,2}, {0,3}};
+    int pattern_[9][2] = {{0, 0}, {0,-4}, {-3,-3}, {3,-3}, {-3,0}, {3,3}, {4,0}, {-3,3}, {0,4}};
 };
 
 int main ( int argc, char** argv )
@@ -192,6 +215,9 @@ int main ( int argc, char** argv )
         if ( color.data==nullptr || depth.data==nullptr )
             continue; 
         cv::cvtColor ( color, gray, cv::COLOR_BGR2GRAY );
+        // int pattern_[9][2] = {{0, 0}, {0,-2}, {-1,-1}, {1,-1}, {-2,0}, {1,1}, {2,0}, {-1,1}, {0,2}};
+        // int pattern_[9][2] = {{0, 0}, {0,-3}, {-2,-2}, {2,-2}, {-2,0}, {2,2}, {3,0}, {-2,2}, {0,3}};
+        int pattern_[9][2] = {{0, 0}, {0,-4}, {-3,-3}, {3,-3}, {-3,0}, {3,3}, {4,0}, {-3,3}, {0,4}};
         if ( index ==0 )
         {
             // select the pixels with high gradiants 
@@ -209,7 +235,15 @@ int main ( int argc, char** argv )
                         continue;
                     Eigen::Vector3d p3d = project2Dto3D ( x, y, d, fx, fy, cx, cy, depth_scale );
                     float grayscale = float ( gray.ptr<uchar> (y) [x] );
-                    measurements.push_back ( Measurement ( p3d, grayscale ) );
+
+                    // measurements.push_back ( Measurement ( p3d, grayscale ) );
+
+                    Vec9d obsv;
+                    for (int i = 0; i < 9; i++) {
+                        float g = float ( gray.ptr<uchar> (y+pattern_[i][1]) [x+pattern_[i][0]] );
+                        obsv[i] = g;
+                    }
+                    measurements.push_back ( Measurement ( p3d, grayscale, obsv) );
                 }
             prev_color = color.clone();
             cout<<"add total "<<measurements.size()<<" measurements."<<endl;
@@ -229,8 +263,8 @@ int main ( int argc, char** argv )
         color.copyTo ( img_show ( cv::Rect ( 0,color.rows,color.cols, color.rows ) ) );
         for ( Measurement m:measurements )
         {
-            if ( rand() > RAND_MAX/5 )
-                continue;
+            // if ( rand() > RAND_MAX/5 )
+            //     continue;
             Eigen::Vector3d p = m.pos_world;
             Eigen::Vector2d pixel_prev = project3Dto2D ( p ( 0,0 ), p ( 1,0 ), p ( 2,0 ), fx, fy, cx, cy );
             Eigen::Vector3d p2 = Tcw*m.pos_world;
@@ -271,7 +305,7 @@ bool poseEstimationDirect ( const vector< Measurement >& measurements, cv::Mat* 
                 g2o::make_unique<DirectBlock>(g2o::make_unique<g2o::LinearSolverDense<DirectBlock::PoseMatrixType> >()));
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm ( solver );
-    optimizer.setVerbose( true );
+    // optimizer.setVerbose( true );
 
     g2o::VertexSE3Expmap* pose = new g2o::VertexSE3Expmap();
     pose->setEstimate ( g2o::SE3Quat ( Tcw.rotation(), Tcw.translation() ) );
@@ -287,14 +321,22 @@ bool poseEstimationDirect ( const vector< Measurement >& measurements, cv::Mat* 
             K ( 0,0 ), K ( 1,1 ), K ( 0,2 ), K ( 1,2 ), gray
         );
         edge->setVertex ( 0, pose );
-        edge->setMeasurement ( m.grayscale );
-        edge->setInformation ( Eigen::Matrix<double,1,1>::Identity() );
+        edge->setMeasurement ( m.grayscales );
+        edge->setInformation ( Eigen::Matrix<double,9,9>::Identity() );
+        // edge->setMeasurement ( m.grayscale );
+        // edge->setInformation ( Eigen::Matrix<double,1,1>::Identity() );
         edge->setId ( id++ );
+        edge->setRobustKernel(new g2o::RobustKernelHuber);
         optimizer.addEdge ( edge );
     }
     cout<<"edges in graph: "<<optimizer.edges().size() <<endl;
+    chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
     optimizer.initializeOptimization();
     optimizer.optimize ( 30 );
+    chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+    chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>> ( t2-t1 );
+    cout<<"optimization costs time: "<<time_used.count() <<" seconds."<<endl;
     Tcw = pose->estimate();
+    return true;
 }
 

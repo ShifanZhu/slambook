@@ -33,6 +33,7 @@ void SetOrdering(BALProblem* bal_problem, ceres::Solver::Options* options, const
     if (params.ordering == "automatic")
         return;
 
+    // Ceres 采用额外的类型 ParameterBlockOrdering 来管理 schur 消元顺序，并且使用 AddElementToGroup 来对变量进行编号从而定义消元顺序
     ceres::ParameterBlockOrdering* ordering = new ceres::ParameterBlockOrdering;
 
     // The points come before the cameras

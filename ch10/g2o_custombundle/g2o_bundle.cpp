@@ -68,9 +68,10 @@ void BuildProblem(const BALProblem* bal_problem, g2o::SparseOptimizer* optimizer
         ConstVectorRef temVecPoint(raw_points + point_block_size * j, point_block_size);
         VertexPointBAL* pPoint = new VertexPointBAL();
         pPoint->setEstimate(temVecPoint);   // initial value for the point i..
-        pPoint->setId(j + num_cameras);     // each vertex should have an unique id, no matter it is a camera vertex, or a point vertex 
+        pPoint->setId(j + num_cameras);     // each vertex should have an unique id, no matter it is a camera vertex, or a point vertex
 
         // remeber to add vertex into optimizer..
+        // 设置该点在解方程时进行 Schur 消元
         pPoint->setMarginalized(true);
         optimizer->addVertex(pPoint);
     }
